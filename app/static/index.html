@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="sl">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>LearnMe - Pametni testi</title>
+    <link rel="stylesheet" href="/static/style.css" />
+  </head>
+  <body>
+    <main class="wrap">
+      <h1>LearnMe</h1>
+      <p class="lead">Generiranje in ocenjevanje testov v slovenscini.</p>
+      <p id="status-text" class="status info" aria-live="polite">Pripravljen.</p>
+
+      <section class="card" id="setup-card">
+        <h2>1. Nastavi test</h2>
+        <form id="generate-form">
+          <label for="topic">Tema</label>
+          <input id="topic" name="topic" placeholder="npr. Fotosinteza" required />
+
+          <label for="chapter">Poglavje</label>
+          <input id="chapter" name="chapter" placeholder="npr. Celicni procesi" required />
+
+          <label for="level">Nivo</label>
+          <select id="level" name="level">
+            <option value="gimnazija_standard">Gimnazija - standard</option>
+            <option value="gimnazija_napredno">Gimnazija - napredno</option>
+            <option value="osnovna">Osnovna sola</option>
+          </select>
+
+          <label for="question_count">Stevilo vprasanj</label>
+          <input id="question_count" name="question_count" type="number" min="3" max="20" value="8" />
+
+          <button type="submit">Generiraj test</button>
+        </form>
+      </section>
+
+      <section class="card hidden" id="test-card">
+        <h2>2. Resi test</h2>
+        <form id="answers-form"></form>
+      </section>
+
+      <section class="card hidden" id="result-card">
+        <h2>3. Rezultat</h2>
+        <div id="result-output"></div>
+        <button id="regenerate-btn" type="button">Ustvari nov test brez ponovitev</button>
+      </section>
+
+      <section class="card" id="progress-card">
+        <h2>Napredek</h2>
+        <div id="progress-output">Se ni zabelezenih rezultatov.</div>
+      </section>
+    </main>
+
+    <script src="/static/app.js"></script>
+  </body>
+</html>
