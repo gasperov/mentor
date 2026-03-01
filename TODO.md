@@ -1,44 +1,44 @@
-# Projekt TODO (MVP -> V1)
+# Project TODO (MVP -> V1)
 
-## 1. Osnovna arhitektura (MVP)
-- [ ] Izbrana tehnologija: Python + FastAPI + preprost HTML/CSS/JS frontend.
-- [ ] Definirati modele: predmet/tema/poglavje/nivo, test, vprašanje, odgovor, ocena, vrzeli.
-- [ ] Dodati API endpoint za generiranje testa prek ChatGPT.
-- [ ] Dodati API endpoint za ocenjevanje odgovorov in analizo vrzeli.
-- [ ] Vmesno hranjenje testov (in-memory), kasneje prehod na bazo.
+## 1. Core architecture (MVP)
+- [ ] Chosen technology: Python + FastAPI + simple HTML/CSS/JS frontend.
+- [ ] Define models: subject/topic/chapter/level, test, question, answer, grade, gaps.
+- [ ] Add API endpoint for test generation via ChatGPT.
+- [ ] Add API endpoint for answer grading and gap analysis.
+- [ ] Keep tests in memory for now; migrate to a database later.
 
-## 2. Prompting in kvaliteta vsebine
-- [ ] Pripraviti sistemske promte v slovenščini za:
-- [ ] generiranje vprašanj po nivojih gimnazije,
-- [ ] ocenjevanje kratkih in daljših odgovorov,
-- [ ] odkrivanje vrzeli in predlogov za učenje.
-- [ ] Uvesti strukturiran JSON izhod in validacijo.
-- [ ] Dodati zaščite pred neveljavnimi/nepopolnimi odgovori modela.
+## 2. Prompting and content quality
+- [ ] Prepare system prompts in Slovene for:
+- [ ] generating questions by high school level,
+- [ ] grading short and long-form answers,
+- [ ] detecting gaps and suggesting learning actions.
+- [ ] Enforce structured JSON output and validation.
+- [ ] Add safeguards for invalid/incomplete model responses.
 
-## 3. Uporabniški tok (web)
-- [ ] Stran 1: vnos tema/poglavje/nivo.
-- [ ] Stran 2: reševanje testa.
-- [ ] Stran 3: rezultat, točke, razlaga napak, vrzeli znanja.
-- [ ] Dodati prikaz priporočil za nadaljnje učenje (v slovenščini).
+## 3. User flow (web)
+- [ ] Page 1: enter topic/chapter/level.
+- [ ] Page 2: solve the test.
+- [ ] Page 3: result, points, mistake explanations, knowledge gaps.
+- [ ] Add recommended next learning steps display (in Slovene).
 
-## 4. Učni materiali
-- [ ] Endpoint za pripravo kratkega učnega načrta glede na vrzeli.
-- [ ] Generiranje povzetka snovi, mini razlage, in dodatnih vaj.
-- [ ] Možnost izvoza učnega lista (PDF ali Markdown).
+## 4. Learning materials
+- [ ] Endpoint for generating a short study plan based on gaps.
+- [ ] Generate content summary, mini explanations, and extra exercises.
+- [ ] Option to export a study sheet (PDF or Markdown).
 
-## 5. Varnost in stroški
-- [ ] API ključ izključno preko okoljske spremenljivke.
-- [ ] Omejitev dolžine vhodov (tema/poglavje) in osnovni rate limiting.
-- [ ] Logiranje brez osebnih podatkov.
-- [ ] Dodati budget guardrails (npr. max število vprašanj / max tokeni).
+## 5. Security and costs
+- [ ] API key only via environment variable.
+- [ ] Input length limits (topic/chapter) and basic rate limiting.
+- [ ] Logging without personal data.
+- [ ] Add budget guardrails (e.g., max number of questions / max tokens).
 
-## 6. Testiranje in kvaliteta
-- [ ] Unit testi za validacijo modelov in parsing AI izhoda.
-- [ ] Integracijski testi za API tok (generate -> answer -> grade).
-- [ ] Testi za robne primere (prazni odgovori, zelo kratki odgovori, neveljaven JSON).
+## 6. Testing and quality
+- [ ] Unit tests for model validation and AI output parsing.
+- [ ] Integration tests for API flow (generate -> answer -> grade).
+- [ ] Edge-case tests (empty answers, very short answers, invalid JSON).
 
-## 7. Priprava na produkcijo
-- [ ] Persistenca (PostgreSQL) za zgodovino testov.
-- [ ] Avtentikacija (učenci/učitelji) in osnovna administracija.
+## 7. Production readiness
+- [ ] Persistence (PostgreSQL) for test history.
+- [ ] Authentication (students/teachers) and basic administration.
 - [ ] Docker + CI pipeline.
-- [ ] Monitoring (napake, latenca, poraba API klicev).
+- [ ] Monitoring (errors, latency, API usage).

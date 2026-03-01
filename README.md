@@ -1,86 +1,86 @@
 # LearnMe (MVP Scaffold)
 
-Spletna aplikacija za:
-- generiranje testa po temi/poglavju/nivoju,
-- resevanje testa v brskalniku,
-- ocenjevanje odgovorov in odkrivanje vrzeli znanja,
-- vse v slovenscini.
+Web app for:
+- generating tests by subject/chapter/level,
+- solving tests in the browser,
+- grading answers and identifying knowledge gaps,
+- all in Slovene.
 
-## Zakaj Python (in ne Go)?
-- hitrejsi MVP za AI tokove (prompting + JSON validacija),
-- bolj zrel ekosistem za LLM integracije,
-- FastAPI omogoca hiter prehod od prototipa do produkcije.
+## Why Python (and not Go)?
+- faster MVP iteration for AI workflows (prompting + JSON validation),
+- more mature ecosystem for LLM integrations,
+- FastAPI enables a quick path from prototype to production.
 
-## Zagon
-1. Ustvari virtualno okolje in namesti pakete:
+## Run
+1. Create a virtual environment and install dependencies:
 ```bash
 python -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-2. Nastavi okolje:
+2. Configure environment variables:
 ```bash
 copy .env.example .env
 ```
-V `.env` nastavi `OPENAI_API_KEY`.
-Privzet model je `gpt-5` (visja kakovost). Ce model ni na voljo za tvoj racun, sistem samodejno preklopi na `gpt-4.1`.
+Set `OPENAI_API_KEY` in `.env`.
+The default model is `gpt-5` (higher quality). If that model is not available for your account, the app automatically falls back to `gpt-4.1`.
 
-3. Zazeni streznik:
+3. Start the server:
 ```bash
 python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8001
 ```
 
-4. Odpri:
+4. Open:
 - `http://127.0.0.1:8001`
 - API docs: `http://127.0.0.1:8001/docs`
 
-## Trenutni API
+## Current API
 - `POST /api/tests/generate`
 - `POST /api/tests/grade`
 - `GET /api/progress`
 
-`POST /api/tests/grade` podpira:
-- JSON (`test_id`, `answers`) ali
-- `multipart/form-data` (`test_id`, `answers_json`, `image_<question_id>` datoteke).
+`POST /api/tests/grade` supports:
+- JSON (`test_id`, `answers`) or
+- `multipart/form-data` (`test_id`, `answers_json`, `image_<question_id>` files).
 
-Ce `OPENAI_API_KEY` ni nastavljen, aplikacija uporablja mock nacin (da lahko frontend tok deluje takoj).
+If `OPENAI_API_KEY` is not set, the app uses mock mode (so the frontend flow works immediately).
 
-## Adaptivno ponavljanje
-- Frontend uporablja runtime `X-Session-Id` (samo med odprto stranjo).
-- Znotraj seje sistem:
-- ne ponavlja prejsnjih vprasanj,
-- po ocenjevanju shrani vrzeli in jih poudari v naslednjem testu.
-- Ob reloadu ali zaprtju browserja/taba je seja pozabljena (nov zacetek).
-- Menjava tema/poglavje/nivo samodejno resetira sejo, da se stanja ne mesajo med temami.
+## Adaptive repetition
+- The frontend uses a runtime `X-Session-Id` (only while the page is open).
+- Within a session, the system:
+- does not repeat previous questions,
+- saves knowledge gaps after grading and emphasizes them in the next test.
+- On reload or tab/browser close, the session is forgotten (fresh start).
+- Changing subject/chapter/level automatically resets the session to avoid state mixing across topics.
 
-## Shranjevanje napredka
-- Napredek (rezultati poskusov) se shranjuje v `data/progress.json`.
-- Dodatni tabelarni log ocen se shranjuje v `data/progress.txt`.
-- Identiteta ucenca je anonimni `X-Student-Id` iz `localStorage`.
-- Tako se ob ponovnem odprtju brskalnika vidi zgodovina napredka.
+## Progress storage
+- Progress (attempt results) is saved to `data/progress.json`.
+- An additional tabular grading log is saved to `data/progress.txt`.
+- Student identity is an anonymous `X-Student-Id` from `localStorage`.
+- This allows progress history to persist across browser restarts.
 
-## Nakljucnost testov
-- Generiranje uporablja variacijski marker in nakljucni pristop, zato novi testi niso vedno enaki.
-- Podobna vprasanja so dovoljena, natancne ponovitve znotraj seje so blokirane.
+## Test randomness
+- Generation uses a variation marker and randomized approach, so new tests are not always identical.
+- Similar questions are allowed, but exact repeats within a session are blocked.
 
-## Odgovori s sliko (telefon)
-- Pri vsakem vprasanju lahko dodas sliko odgovora.
-- Na mobilnem telefonu input odpre kamero (`capture=environment`), da lahko takoj poslikas nalogo.
-- Ob oddaji se slika poslje skupaj z odgovori in se doda kot oznacen slikovni odgovor za to vprasanje.
+## Image answers (phone)
+- You can add an image answer to each question.
+- On mobile, the input opens the camera (`capture=environment`) so you can immediately take a photo of the solution.
+- On submit, the image is sent with answers and attached as a labeled image answer for that question.
 
-## Ocenjevanje
-- Pri vsakem vprasanju rezultat zdaj vsebuje tudi `Popoln odgovor (100%)`, ki prikaze primer idealnega odgovora.
+## Grading
+- For each question, the result now also includes `Perfect answer (100%)`, showing an example ideal answer.
 
-## Preprecevanje spanja racunalnika
-- Na Windows sistemu aplikacija med delovanjem backend procesa zahteva, da sistem ne zaspi.
-- Ko backend ustavis, se nastavitev samodejno sprosti.
+## Prevent computer sleep
+- On Windows, while the backend process is running, the app requests that the system does not sleep.
+- When you stop the backend, that setting is automatically released.
 
-## Predlagana naslednja iteracija
-- persistenca (PostgreSQL),
-- boljsi prompti + strozja JSON shema,
-- locen endpoint za pripravo ucnega materiala po vrzelih,
-- avtorizacija uporabnikov (ucenec/ucitelj).
+## Suggested next iteration
+- persistence (PostgreSQL),
+- better prompts + stricter JSON schema,
+- separate endpoint for generating study material from knowledge gaps,
+- user authorization (student/teacher).
 
-## Licenca
-Projekt je licenciran pod MIT licenco. Glej datoteko `LICENSE`.
+## License
+This project is licensed under the MIT License. See the `LICENSE` file.
