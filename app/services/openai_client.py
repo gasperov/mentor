@@ -17,10 +17,19 @@ class AIClient:
     def __init__(self) -> None:
         self._client = OpenAI(api_key=settings.openai_api_key) if settings.openai_api_key else None
         self._model = settings.openai_model
+        self._last_used_model: str | None = None
 
     @property
     def enabled(self) -> bool:
         return self._client is not None
+
+    @property
+    def configured_model(self) -> str:
+        return self._model
+
+    @property
+    def last_used_model(self) -> str | None:
+        return self._last_used_model
 
     def ask_for_json(self, system_prompt: str, user_prompt: str) -> dict[str, Any]:
         if not self._client:
@@ -53,20 +62,37 @@ class AIClient:
             {"role": "user", "content": user_prompt},
         ]
         try:
-            return self._client.responses.create(
-                model=self._model,
-                input=payload,
-                temperature=0.3,
-            )
+            return self._create_response(self._model, payload)
         except Exception as exc:
             msg = str(exc).lower()
             # If configured model is unavailable, fallback to stable high-quality model.
-            if self._model != "gpt-4.1" and ("model" in msg and ("not found" in msg or "does not exist" in msg)):
-                return self._client.responses.create(
-                    model="gpt-4.1",
+            should_fallback = (
+                "model_not_found" in msg
+                or ("model" in msg and ("not found" in msg or "does not exist" in msg or "must be verified" in msg))
+            )
+            if self._model != "gpt-4.1" and should_fallback:
+                return self._create_response("gpt-4.1", payload)
+            raise
+
+    def _create_response(self, model: str, payload: list[dict[str, str]]):
+        try:
+            response = self._client.responses.create(
+                model=model,
+                input=payload,
+                temperature=0.3,
+            )
+            self._last_used_model = model
+            return response
+        except Exception as exc:
+            msg = str(exc).lower()
+            # Some models (e.g., gpt-5) do not support temperature.
+            if "unsupported parameter" in msg and "temperature" in msg:
+                response = self._client.responses.create(
+                    model=model,
                     input=payload,
-                    temperature=0.3,
                 )
+                self._last_used_model = model
+                return response
             raise
 
     def _extract_json_text(self, text: str) -> str:

@@ -4,6 +4,8 @@ let sessionId = createRuntimeId("sess");
 let studentId = createRuntimeId("student");
 let activeTopicKey = null;
 let isBusy = false;
+const selectedImages = new Map();
+const previewUrls = new Map();
 
 const generateForm = document.getElementById("generate-form");
 const answersForm = document.getElementById("answers-form");
@@ -13,6 +15,7 @@ const resultOutput = document.getElementById("result-output");
 const regenerateBtn = document.getElementById("regenerate-btn");
 const progressOutput = document.getElementById("progress-output");
 const statusText = document.getElementById("status-text");
+const modelIndicator = document.getElementById("model-indicator");
 
 loadProgress();
 
@@ -49,6 +52,7 @@ generateForm.addEventListener("submit", async (e) => {
       setStatus(msg, "error");
       return;
     }
+    updateModelIndicatorFromResponse(res);
     currentTest = await res.json();
     renderTest(currentTest);
     setStatus("Test je pripravljen.", "success");
@@ -60,7 +64,6 @@ answersForm.addEventListener("submit", async (e) => {
   if (isBusy || !currentTest) return;
 
   const answers = {};
-  const formData = new FormData();
   currentTest.questions.forEach((q) => {
     if (q.type === "multiple_choice") {
       const checked = Array.from(document.querySelectorAll(`input[name="answer-${q.id}"]:checked`)).map(
@@ -71,28 +74,46 @@ answersForm.addEventListener("submit", async (e) => {
       const el = document.getElementById(`answer-${q.id}`);
       answers[q.id] = el ? el.value.trim() : "";
     }
-
-    const imageInput = document.getElementById(`image-${q.id}`);
-    if (imageInput && imageInput.files && imageInput.files[0]) {
-      formData.append(`image_${q.id}`, imageInput.files[0]);
-    }
   });
-  formData.append("test_id", currentTest.test_id);
-  formData.append("answers_json", JSON.stringify(answers));
+  const hasImages = selectedImages.size > 0;
 
   const btn = answersForm.querySelector("button[type='submit']");
   await withBusy(btn, "Ocenjevanje...", "Oddaj in oceni", async () => {
-    setStatus("Ocenjujem odgovore...", "info");
+    setStatus(hasImages ? "Ocenjujem odgovore in nalagam slike..." : "Ocenjujem odgovore...", "info");
+    let body;
+    let headers;
+
+    if (hasImages) {
+      const formData = new FormData();
+      currentTest.questions.forEach((q) => {
+        const file = selectedImages.get(String(q.id));
+        if (file) {
+          formData.append(`image_${q.id}`, file);
+        }
+      });
+      formData.append("test_id", currentTest.test_id);
+      formData.append("answers_json", JSON.stringify(answers));
+      body = formData;
+      headers = buildHeaders({ isMultipart: true });
+    } else {
+      body = JSON.stringify({
+        test_id: currentTest.test_id,
+        answers,
+      });
+      headers = buildHeaders();
+    }
+
     const res = await fetch("/api/tests/grade", {
       method: "POST",
-      headers: buildHeaders({ isMultipart: true }),
-      body: formData,
+      headers,
+      body,
     });
     if (!res.ok) {
       const msg = await extractErrorMessage(res, "Napaka pri ocenjevanju.");
       setStatus(msg, "error");
       return;
     }
+    updateModelIndicatorFromResponse(res);
     const grade = await res.json();
     renderResult(grade);
     await loadProgress();
@@ -120,6 +141,7 @@ regenerateBtn.addEventListener("click", async () => {
       setStatus(msg, "error");
       return;
     }
+    updateModelIndicatorFromResponse(res);
     currentTest = await res.json();
     renderTest(currentTest);
     setStatus("Nov test je pripravljen.", "success");
@@ -127,6 +149,7 @@ regenerateBtn.addEventListener("click", async () => {
 });
 
 function renderTest(test) {
+  clearAllSelectedImages();
   answersForm.innerHTML = "";
   test.questions.forEach((q, idx) => {
     const wrap = document.createElement("div");
@@ -150,8 +173,18 @@ function renderTest(test) {
         ? ""
         : `<textarea id="answer-${q.id}" placeholder="Vpisi odgovor..."></textarea>`;
     const imageInput = `
-      <label for="image-${q.id}" class="mini">Dodaj sliko odgovora (telefon/kamera):</label>
-      <input id="image-${q.id}" type="file" accept="image/*" capture="environment" />
+      <div class="image-tools">
+        <label class="mini">Dodaj sliko odgovora (telefon/kamera):</label>
+        <input id="image-camera-${q.id}" class="hidden-file" type="file" accept="image/*" capture="environment" />
+        <input id="image-gallery-${q.id}" class="hidden-file" type="file" accept="image/*" />
+        <div class="upload-actions">
+          <button type="button" class="secondary" id="camera-btn-${q.id}">Odpri kamero</button>
+          <button type="button" class="secondary" id="gallery-btn-${q.id}">Izberi iz galerije</button>
+          <button type="button" class="ghost hidden" id="clear-image-${q.id}">Odstrani sliko</button>
+        </div>
+        <p id="image-meta-${q.id}" class="mini hidden"></p>
+        <img id="image-preview-${q.id}" class="image-preview hidden" alt="Predogled slike odgovora" />
+      </div>
     `;
 
     wrap.innerHTML = `
@@ -162,6 +195,7 @@ function renderTest(test) {
       ${imageInput}
     `;
     answersForm.appendChild(wrap);
+    bindImageControls(String(q.id));
   });
 
   const submit = document.createElement("button");
@@ -277,6 +311,7 @@ function topicKey(payload) {
 }
 
 function resetPracticeState() {
+  clearAllSelectedImages();
   sessionId = createRuntimeId("sess");
   studentId = createRuntimeId("student");
   currentTest = null;
@@ -330,4 +365,131 @@ function escapeHtml(value) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#39;");
+}
+
+function updateModelIndicatorFromResponse(response) {
+  if (!modelIndicator || !response || !response.headers) return;
+  const used = response.headers.get("X-AI-Model-Used");
+  const configured = response.headers.get("X-AI-Model-Configured");
+  if (!used && !configured) return;
+
+  if (used === "mock") {
+    modelIndicator.textContent = "AI model: mock (OPENAI_API_KEY ni nastavljen).";
+    return;
+  }
+
+  if (used && configured && used !== configured) {
+    modelIndicator.textContent = `AI model: ${used} (fallback iz ${configured}).`;
+    return;
+  }
+
+  modelIndicator.textContent = `AI model: ${used || configured}.`;
+}
+
+function bindImageControls(questionId) {
+  const cameraInput = document.getElementById(`image-camera-${questionId}`);
+  const galleryInput = document.getElementById(`image-gallery-${questionId}`);
+  const cameraBtn = document.getElementById(`camera-btn-${questionId}`);
+  const galleryBtn = document.getElementById(`gallery-btn-${questionId}`);
+  const clearBtn = document.getElementById(`clear-image-${questionId}`);
+
+  if (cameraBtn && cameraInput) {
+    cameraBtn.addEventListener("click", () => cameraInput.click());
+  }
+  if (galleryBtn && galleryInput) {
+    galleryBtn.addEventListener("click", () => galleryInput.click());
+  }
+  if (clearBtn) {
+    clearBtn.addEventListener("click", () => clearSelectedImage(questionId));
+  }
+  if (cameraInput) {
+    cameraInput.addEventListener("change", () => onImageSelected(questionId, cameraInput.files?.[0] || null));
+  }
+  if (galleryInput) {
+    galleryInput.addEventListener("change", () => onImageSelected(questionId, galleryInput.files?.[0] || null));
+  }
+}
+
+function onImageSelected(questionId, file) {
+  if (!file) return;
+  if (!String(file.type || "").startsWith("image/")) {
+    setStatus("Datoteka mora biti slika.", "error");
+    return;
+  }
+
+  setSelectedImage(questionId, file);
+  setStatus("Slika odgovora je dodana.", "success");
+}
+
+function setSelectedImage(questionId, file) {
+  clearSelectedImage(questionId, { silent: true });
+  selectedImages.set(questionId, file);
+
+  const imageMeta = document.getElementById(`image-meta-${questionId}`);
+  const imagePreview = document.getElementById(`image-preview-${questionId}`);
+  const clearBtn = document.getElementById(`clear-image-${questionId}`);
+  const cameraInput = document.getElementById(`image-camera-${questionId}`);
+  const galleryInput = document.getElementById(`image-gallery-${questionId}`);
+
+  const objectUrl = URL.createObjectURL(file);
+  previewUrls.set(questionId, objectUrl);
+
+  if (imageMeta) {
+    const sizeKB = Math.max(1, Math.round(file.size / 1024));
+    imageMeta.textContent = `${file.name} (${sizeKB} KB)`;
+    imageMeta.classList.remove("hidden");
+  }
+  if (imagePreview) {
+    imagePreview.src = objectUrl;
+    imagePreview.classList.remove("hidden");
+  }
+  if (clearBtn) {
+    clearBtn.classList.remove("hidden");
+  }
+  if (cameraInput) cameraInput.value = "";
+  if (galleryInput) galleryInput.value = "";
+}
+
+function clearSelectedImage(questionId, options = {}) {
+  selectedImages.delete(questionId);
+
+  const oldUrl = previewUrls.get(questionId);
+  if (oldUrl) {
+    URL.revokeObjectURL(oldUrl);
+    previewUrls.delete(questionId);
+  }
+
+  const imageMeta = document.getElementById(`image-meta-${questionId}`);
+  const imagePreview = document.getElementById(`image-preview-${questionId}`);
+  const clearBtn = document.getElementById(`clear-image-${questionId}`);
+  const cameraInput = document.getElementById(`image-camera-${questionId}`);
+  const galleryInput = document.getElementById(`image-gallery-${questionId}`);
+
+  if (imageMeta) {
+    imageMeta.textContent = "";
+    imageMeta.classList.add("hidden");
+  }
+  if (imagePreview) {
+    imagePreview.removeAttribute("src");
+    imagePreview.classList.add("hidden");
+  }
+  if (clearBtn) {
+    clearBtn.classList.add("hidden");
+  }
+  if (cameraInput) cameraInput.value = "";
+  if (galleryInput) galleryInput.value = "";
+
+  if (!options.silent) {
+    setStatus("Slika odgovora je odstranjena.", "info");
+  }
+}
+
+function clearAllSelectedImages() {
+  const keys = Array.from(previewUrls.keys());
+  keys.forEach((questionId) => {
+    const oldUrl = previewUrls.get(questionId);
+    if (oldUrl) URL.revokeObjectURL(oldUrl);
+  });
+  selectedImages.clear();
+  previewUrls.clear();
 }

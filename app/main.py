@@ -1,7 +1,7 @@
 from pathlib import Path
 import json
 
-from fastapi import FastAPI, Header, HTTPException, Request, UploadFile
+from fastapi import FastAPI, Header, HTTPException, Request, Response, UploadFile
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -38,9 +38,13 @@ def index() -> FileResponse:
 
 
 @app.post("/api/tests/generate", response_model=GeneratedTest)
-def generate_test(req: TestRequest, x_session_id: str | None = Header(default=None)) -> GeneratedTest:
+def generate_test(
+    req: TestRequest, response: Response, x_session_id: str | None = Header(default=None)
+) -> GeneratedTest:
     try:
-        return service.generate_test(req, session_id=x_session_id or "anonymous")
+        result = service.generate_test(req, session_id=x_session_id or "anonymous")
+        _set_ai_model_headers(response)
+        return result
     except AIClientError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
@@ -48,16 +52,19 @@ def generate_test(req: TestRequest, x_session_id: str | None = Header(default=No
 @app.post("/api/tests/grade", response_model=GradeResult)
 async def grade_test(
     request: Request,
+    response: Response,
     x_session_id: str | None = Header(default=None),
     x_student_id: str | None = Header(default=None),
 ) -> GradeResult:
     try:
         req = await _parse_grade_request(request)
-        return service.grade_test(
+        result = service.grade_test(
             req,
             session_id=x_session_id or "anonymous",
             student_id=x_student_id or "anonymous",
         )
+        _set_ai_model_headers(response)
+        return result
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except AIClientError as exc:
@@ -75,7 +82,18 @@ async def _parse_grade_request(request: Request) -> GradeRequest:
         payload = await request.json()
         return GradeRequest.model_validate(payload)
 
-    form = await request.form()
+    try:
+        form = await request.form()
+    except AssertionError as exc:
+        if "python-multipart" in str(exc):
+            raise HTTPException(
+                status_code=500,
+                detail=(
+                    "Za multipart/form-data manjka odvisnost 'python-multipart'. "
+                    "Namesti pakete z: pip install -r requirements.txt"
+                ),
+            ) from exc
+        raise
     test_id = str(form.get("test_id") or "").strip()
     if not test_id:
         raise HTTPException(status_code=422, detail="Manjka test_id.")
@@ -109,3 +127,9 @@ def _validate_image_upload(file: UploadFile) -> None:
     content_type = (file.content_type or "").lower()
     if content_type and not content_type.startswith("image/"):
         raise HTTPException(status_code=422, detail=f"Datoteka '{file.filename}' ni slika.")
+
+
+def _set_ai_model_headers(response: Response) -> None:
+    configured, used = service.get_model_info()
+    response.headers["X-AI-Model-Configured"] = configured
+    response.headers["X-AI-Model-Used"] = used

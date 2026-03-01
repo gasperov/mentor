@@ -67,6 +67,13 @@ class TestService:
         )
         return ProgressResponse(summary=summary, attempts=attempts[-30:])
 
+    def get_model_info(self) -> tuple[str, str]:
+        if not self._ai.enabled:
+            return ("mock", "mock")
+        configured = self._ai.configured_model
+        used = self._ai.last_used_model or configured
+        return (configured, used)
+
     def _generate_with_ai(
         self, req: TestRequest, seen_questions: set[str], focus_areas: list[str]
     ) -> GeneratedTest:

@@ -140,3 +140,41 @@ button:disabled {
   background: #ffecef;
   color: #8a1f2e;
 }
+
+.model-indicator {
+  margin: 8px 2px 0;
+}
+
+.hidden-file {
+  display: none;
+}
+
+.upload-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
+.upload-actions button {
+  width: auto;
+  margin-top: 0;
+}
+
+button.secondary {
+  background: #e8f0fb;
+  color: #1b3553;
+}
+
+button.ghost {
+  background: #f4f6f9;
+  color: #39465a;
+}
+
+.image-preview {
+  width: 100%;
+  max-width: 260px;
+  margin-top: 8px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+}

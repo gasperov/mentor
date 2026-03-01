@@ -66,8 +66,14 @@ If `OPENAI_API_KEY` is not set, the app uses mock mode (so the frontend flow wor
 
 ## Image answers (phone)
 - You can add an image answer to each question.
-- On mobile, the input opens the camera (`capture=environment`) so you can immediately take a photo of the solution.
-- On submit, the image is sent with answers and attached as a labeled image answer for that question.
+- On mobile, you now get explicit actions for `Open camera` and `Choose from gallery`.
+- A preview and filename are shown before submit, and you can remove a selected image.
+- If no image is attached, grading uses JSON; if at least one image is attached, grading uses `multipart/form-data`.
+- Attached images are sent with answers and marked as labeled image answers for each question.
+
+## AI model indicator
+- The UI shows the currently used AI model after test generation/grading.
+- If fallback happens (for example from `gpt-5` to `gpt-4.1`), the indicator explicitly shows both models.
 
 ## Grading
 - For each question, the result now also includes `Perfect answer (100%)`, showing an example ideal answer.
