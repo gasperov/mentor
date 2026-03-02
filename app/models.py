@@ -22,7 +22,7 @@ class TestRequest(BaseModel):
     chapter: str = Field(min_length=1, max_length=120)
     level: SchoolLevel
     language: Literal["sl"] = "sl"
-    question_count: int = Field(default=8, ge=3, le=20)
+    question_count: int = Field(default=8, ge=3, le=30)
 
 
 class TestQuestion(BaseModel):
