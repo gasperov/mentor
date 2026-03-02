@@ -30,9 +30,19 @@ The default model is `gpt-5` (higher quality). If that model is not available fo
 ```bash
 mkdir certs
 ```
+Generate a local TLS certificate pair (OpenSSL):
+```bash
+openssl req -x509 -newkey rsa:2048 -sha256 -days 365 -nodes -keyout certs/server.key -out certs/server.crt -subj "/CN=localhost" -addext "subjectAltName=DNS:localhost,IP:127.0.0.1"
+```
+If OpenSSL is not available on Windows, use `mkcert`:
+```bash
+mkcert -install
+mkcert -cert-file certs/server.crt -key-file certs/server.key localhost 127.0.0.1
+```
 Set these in `.env`:
 - `SSL_CERTFILE=certs/server.crt`
 - `SSL_KEYFILE=certs/server.key`
+Note: SSH keys generated with `ssh-keygen` cannot be used as HTTPS TLS certs.
 
 4. Configure Basic Auth users:
 ```bash

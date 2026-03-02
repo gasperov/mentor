@@ -1,9 +1,13 @@
 import base64
 import binascii
+import asyncio
+from contextlib import asynccontextmanager
 import hmac
-from pathlib import Path
 import json
 from io import BytesIO
+from pathlib import Path
+import ssl
+import sys
 
 from fastapi import FastAPI, Header, HTTPException, Query, Request, Response, UploadFile
 from fastapi.responses import FileResponse
@@ -16,15 +20,12 @@ from app.services.power import SleepBlocker
 from app.services.progress_store import ProgressStore
 from app.services.test_service import TestService
 
-app = FastAPI(title="LearnMe - Test Generator")
-
 service = TestService(
     ai_client=AIClient(),
     progress_store=ProgressStore(Path(__file__).parent.parent / "data" / "progress.json"),
 )
 sleep_blocker = SleepBlocker()
 static_dir = Path(__file__).parent / "static"
-app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
 
 class BasicAuth:
@@ -85,16 +86,38 @@ class BasicAuth:
 basic_auth = BasicAuth(settings.resolve_path(settings.basic_auth_users_file)) if settings.basic_auth_enabled else None
 
 
-@app.on_event("startup")
-def startup() -> None:
+def _is_ignorable_windows_reset(context: dict) -> bool:
+    exc = context.get("exception")
+    if not isinstance(exc, ConnectionResetError):
+        return False
+    if getattr(exc, "winerror", None) != 10054:
+        return False
+    message = str(context.get("message") or "")
+    handle = context.get("handle")
+    return "_ProactorBasePipeTransport" in message or "_ProactorBasePipeTransport" in repr(handle)
+
+
+def _loop_exception_handler(loop: asyncio.AbstractEventLoop, context: dict) -> None:
+    if _is_ignorable_windows_reset(context):
+        return
+    loop.default_exception_handler(context)
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    if sys.platform.startswith("win"):
+        asyncio.get_running_loop().set_exception_handler(_loop_exception_handler)
     if basic_auth:
         basic_auth.reload()
     sleep_blocker.enable()
+    try:
+        yield
+    finally:
+        sleep_blocker.disable()
 
 
-@app.on_event("shutdown")
-def shutdown() -> None:
-    sleep_blocker.disable()
+app = FastAPI(title="LearnMe - Test Generator", lifespan=lifespan)
+app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
 
 @app.middleware("http")
@@ -233,8 +256,23 @@ def _set_ai_model_headers(response: Response) -> None:
     response.headers["X-AI-Model-Used"] = used
 
 
+def _validate_tls_certificate_pair(certfile: Path, keyfile: Path) -> None:
+    context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    try:
+        context.load_cert_chain(certfile=str(certfile), keyfile=str(keyfile))
+    except ssl.SSLError as exc:
+        raise RuntimeError(
+            "SSL_CERTFILE/SSL_KEYFILE are not a valid TLS certificate pair in PEM format. "
+            "Note: SSH keys (from ssh-keygen, like id_ed25519) cannot be used as HTTPS certificates."
+        ) from exc
+
+
 def run() -> None:
     import uvicorn
+
+    if sys.platform.startswith("win"):
+        # Avoid noisy Proactor disconnect tracebacks on Windows when clients reset connections.
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
     certfile = settings.resolve_path(settings.ssl_certfile)
     keyfile = settings.resolve_path(settings.ssl_keyfile)
@@ -245,6 +283,7 @@ def run() -> None:
             f"HTTPS certificates were not found: {missing_str}. "
             "Create cert/key files and configure SSL_CERTFILE and SSL_KEYFILE."
         )
+    _validate_tls_certificate_pair(certfile, keyfile)
 
     uvicorn.run(
         "app.main:app",
@@ -252,6 +291,8 @@ def run() -> None:
         port=settings.port,
         ssl_certfile=str(certfile),
         ssl_keyfile=str(keyfile),
+        timeout_keep_alive=5,
+        timeout_graceful_shutdown=5,
     )
 
 
