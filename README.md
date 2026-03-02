@@ -26,19 +26,38 @@ copy .env.example .env
 Set `OPENAI_API_KEY` in `.env`.
 The default model is `gpt-5` (higher quality). If that model is not available for your account, the app automatically falls back to `gpt-4.1`.
 
-3. Start the server:
+3. Configure HTTPS certificate and key paths (self-signed is fine for local/dev):
 ```bash
-python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8001
+mkdir certs
+```
+Set these in `.env`:
+- `SSL_CERTFILE=certs/server.crt`
+- `SSL_KEYFILE=certs/server.key`
+
+4. Configure Basic Auth users in `config/basic_auth_users.json`:
+```json
+{
+  "users": [
+    { "username": "teacher", "password": "change-this-password" }
+  ]
+}
 ```
 
-4. Open:
-- `http://127.0.0.1:8001`
-- API docs: `http://127.0.0.1:8001/docs`
+5. Start the HTTPS server:
+```bash
+python -m app.main
+```
+
+6. Open:
+- `https://127.0.0.1:8443`
+- API docs: `https://127.0.0.1:8443/docs`
 
 ## Current API
 - `POST /api/tests/generate`
 - `POST /api/tests/grade`
 - `GET /api/progress`
+
+All routes are protected with HTTP Basic Auth when `BASIC_AUTH_ENABLED=true`.
 
 `POST /api/tests/grade` supports:
 - JSON (`test_id`, `answers`) or
@@ -66,6 +85,7 @@ If `OPENAI_API_KEY` is not set, the app uses mock mode (so the frontend flow wor
 
 ## Image answers (phone)
 - You can add an image answer to each question.
+- The app now shows a QR code with the current connect URL, so you can open the app quickly on your phone.
 - On mobile, you now get explicit actions for `Open camera` and `Choose from gallery`.
 - A preview and filename are shown before submit, and you can remove a selected image.
 - If no image is attached, grading uses JSON; if at least one image is attached, grading uses `multipart/form-data`.
@@ -77,6 +97,8 @@ If `OPENAI_API_KEY` is not set, the app uses mock mode (so the frontend flow wor
 
 ## Grading
 - For each question, the result now also includes `Perfect answer (100%)`, showing an example ideal answer.
+- Grading prompt is stricter and emphasizes factual correctness and consistent scoring.
+- Final `total_score` is normalized from per-question scores for consistent grading output.
 
 ## Prevent computer sleep
 - On Windows, while the backend process is running, the app requests that the system does not sleep.

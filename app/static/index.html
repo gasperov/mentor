@@ -13,6 +13,19 @@
       <p id="status-text" class="status info" aria-live="polite">Pripravljen.</p>
       <p id="model-indicator" class="mini model-indicator">AI model: se ni uporabljen.</p>
 
+      <section class="card" id="phone-connect-card">
+        <h2>Povezi telefon</h2>
+        <p class="mini">Odpri spodnji naslov na telefonu ali skeniraj QR kodo.</p>
+        <div class="phone-connect">
+          <img id="phone-qr" class="phone-qr" alt="QR koda za povezavo telefona" />
+          <div class="phone-connect-meta">
+            <a id="phone-url" href="#" target="_blank" rel="noopener noreferrer"></a>
+            <button id="copy-phone-url" type="button" class="secondary">Kopiraj povezavo</button>
+            <p id="phone-connect-help" class="mini"></p>
+          </div>
+        </div>
+      </section>
+
       <section class="card" id="setup-card">
         <h2>1. Nastavi test</h2>
         <form id="generate-form">

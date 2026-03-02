@@ -134,7 +134,11 @@ class TestService:
 
     def _grade_with_ai(self, test: GeneratedTest, answers: dict[str, str]) -> GradeResult:
         system_prompt = (
-            "Ti si ocenjevalec testov v slovenscini. "
+            "Ti si strog, natancen in konzervativen ucitelj-ocenjevalec v slovenscini. "
+            "Preden ocenjujes, za vsako vprasanje najprej interno izracunaj pravilen odgovor. "
+            "Ocenjuj samo glede na vsebino vprasanja in logicno/strokovno pravilnost. "
+            "Ne nagrajuj ugibanj, splosnih fraz ali vsebine, ki ni relevantna za vprasanje. "
+            "Ce je odgovor delno pravilen, tockuj delno in jasno navedi manjkajoce kljucne elemente. "
             "Vrni izkljucno veljaven JSON brez dodatnega besedila."
         )
         questions_repr = [
@@ -142,9 +146,15 @@ class TestService:
             for q in test.questions
         ]
         user_prompt = (
-            "Ocenjuj odgovore dijaka. "
+            "Ocenjuj odgovore dijaka izkljucno po pravilnosti. "
             f"Vprasanja: {questions_repr}. "
             f"Odgovori dijaka: {answers}. "
+            "Za vsak odgovor najprej doloci kljucne tocke popolnega odgovora, nato oceni odstotek pravilnosti. "
+            "Pri multiple_choice je 100 ce je izbira pravilna, drugace 0 (razen ce je odgovor nejasen, potem 0). "
+            "Pri short_answer uporabi strogo rubriko: "
+            "0-20 napacen/neustrezen odgovor; 21-50 osnovno delno razumevanje; "
+            "51-80 vecinoma pravilno z vrzelmi; 81-100 skoraj popolno ali popolno. "
+            "V 'perfect_answer' napisi modelni odgovor, ki bi prejel 100%. "
             "Vrni JSON format: "
             "{\"total_score\":0-100,\"knowledge_level\":\"zacetnik|dober|zelo_dober|odlicen\","
             "\"summary_feedback\":\"...\",\"knowledge_gaps\":[\"...\"],\"focus_areas_for_next_test\":[\"...\"],"
@@ -322,21 +332,22 @@ class TestService:
         self._session_focus_areas[session_id] = unique[:8]
 
     def _normalize_grade_result(self, data: dict[str, Any], test: GeneratedTest) -> GradeResult:
-        total = int(data.get("total_score", 0))
-        total = max(0, min(100, total))
+        total = max(0, min(100, int(data.get("total_score", 0))))
         level = str(data.get("knowledge_level") or self._knowledge_level_from_score(total))
         per_q_raw = data.get("per_question") or []
         per_question: list[QuestionGrade] = []
-        for idx, q in enumerate(test.questions):
+        for q in test.questions:
             found = next((x for x in per_q_raw if str(x.get("question_id")) == q.id), None)
             if found:
+                expected_key_points = [str(x).strip() for x in list(found.get("expected_key_points") or []) if str(x).strip()]
+                perfect_answer = str(found.get("perfect_answer") or "").strip()
                 per_question.append(
                     QuestionGrade(
                         question_id=q.id,
                         score=max(0, min(100, int(found.get("score", 0)))),
-                        feedback=str(found.get("feedback") or "Brez komentarja."),
-                        expected_key_points=list(found.get("expected_key_points") or []),
-                        perfect_answer=str(found.get("perfect_answer") or ""),
+                        feedback=str(found.get("feedback") or "Brez komentarja.").strip(),
+                        expected_key_points=expected_key_points[:8],
+                        perfect_answer=perfect_answer,
                     )
                 )
             else:
@@ -350,13 +361,21 @@ class TestService:
                     )
                 )
 
+        if per_question:
+            total = round(sum(item.score for item in per_question) / len(per_question))
+            level = self._knowledge_level_from_score(total)
+
         return GradeResult(
             total_score=total,
             knowledge_level=level,
-            summary_feedback=str(data.get("summary_feedback") or "Povzetek ni na voljo."),
-            knowledge_gaps=list(data.get("knowledge_gaps") or []),
-            focus_areas_for_next_test=list(data.get("focus_areas_for_next_test") or []),
-            learning_recommendations=list(data.get("learning_recommendations") or []),
+            summary_feedback=str(data.get("summary_feedback") or "Povzetek ni na voljo.").strip(),
+            knowledge_gaps=[str(x).strip() for x in list(data.get("knowledge_gaps") or []) if str(x).strip()][:8],
+            focus_areas_for_next_test=[
+                str(x).strip() for x in list(data.get("focus_areas_for_next_test") or []) if str(x).strip()
+            ][:8],
+            learning_recommendations=[
+                str(x).strip() for x in list(data.get("learning_recommendations") or []) if str(x).strip()
+            ][:8],
             per_question=per_question,
         )
 

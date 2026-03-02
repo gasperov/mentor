@@ -16,7 +16,12 @@ const regenerateBtn = document.getElementById("regenerate-btn");
 const progressOutput = document.getElementById("progress-output");
 const statusText = document.getElementById("status-text");
 const modelIndicator = document.getElementById("model-indicator");
+const phoneQr = document.getElementById("phone-qr");
+const phoneUrl = document.getElementById("phone-url");
+const phoneHelp = document.getElementById("phone-connect-help");
+const copyPhoneUrlBtn = document.getElementById("copy-phone-url");
 
+initPhoneConnect();
 loadProgress();
 
 generateForm.addEventListener("submit", async (e) => {
@@ -492,4 +497,51 @@ function clearAllSelectedImages() {
   });
   selectedImages.clear();
   previewUrls.clear();
+}
+
+function initPhoneConnect() {
+  const url = buildPhoneConnectUrl();
+
+  if (phoneUrl) {
+    phoneUrl.href = url;
+    phoneUrl.textContent = url;
+  }
+
+  if (phoneQr) {
+    phoneQr.src = `/api/connect/qr?data=${encodeURIComponent(url)}&v=${Date.now()}`;
+    phoneQr.addEventListener("error", () => {
+      if (phoneHelp) {
+        phoneHelp.textContent = "QR ni na voljo. Uporabi povezavo zgoraj.";
+      }
+    });
+  }
+
+  if (copyPhoneUrlBtn) {
+    copyPhoneUrlBtn.addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(url);
+        setStatus("Povezava za telefon je kopirana.", "success");
+      } catch (_) {
+        setStatus("Kopiranje ni uspelo. Povezavo skopiraj ročno.", "error");
+      }
+    });
+  }
+
+  const isLocalOnlyHost = ["127.0.0.1", "localhost", "::1"].includes(window.location.hostname);
+  if (phoneHelp) {
+    if (isLocalOnlyHost) {
+      phoneHelp.textContent =
+        "Trenutno tece na localhost. Za dostop s telefona zazeni server z --host 0.0.0.0 in odpri LAN IP racunalnika.";
+    } else {
+      phoneHelp.textContent = "Telefon mora biti v istem Wi-Fi omrezju kot racunalnik.";
+    }
+  }
+}
+
+function buildPhoneConnectUrl() {
+  const url = new URL(window.location.href);
+  url.hash = "";
+  url.search = "";
+  url.pathname = "/";
+  return url.toString();
 }

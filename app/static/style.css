@@ -178,3 +178,30 @@ button.ghost {
   border-radius: 8px;
   border: 1px solid var(--line);
 }
+
+.phone-connect {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.phone-qr {
+  width: 150px;
+  height: 150px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: #fff;
+  object-fit: contain;
+}
+
+.phone-connect-meta {
+  min-width: 220px;
+  flex: 1;
+}
+
+#phone-url {
+  display: block;
+  margin-bottom: 10px;
+  word-break: break-all;
+}
