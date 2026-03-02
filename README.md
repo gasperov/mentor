@@ -34,7 +34,12 @@ Set these in `.env`:
 - `SSL_CERTFILE=certs/server.crt`
 - `SSL_KEYFILE=certs/server.key`
 
-4. Configure Basic Auth users in `config/basic_auth_users.json`:
+4. Configure Basic Auth users:
+```bash
+copy config\basic_auth_users.example.json config\basic_auth_users.json
+```
+Then edit `config/basic_auth_users.json` and set real credentials.
+Example format:
 ```json
 {
   "users": [
@@ -58,6 +63,10 @@ python -m app.main
 - `GET /api/progress`
 
 All routes are protected with HTTP Basic Auth when `BASIC_AUTH_ENABLED=true`.
+Example API call with Basic Auth:
+```bash
+curl -k -u teacher:change-this-password https://127.0.0.1:8443/api/progress
+```
 
 `POST /api/tests/grade` supports:
 - JSON (`test_id`, `answers`) or

@@ -3,6 +3,10 @@
     {
       "username": "teacher",
       "password": "change-this-password"
+    },
+    {
+      "username": "student",
+      "password": "change-this-password-too"
     }
   ]
 }
