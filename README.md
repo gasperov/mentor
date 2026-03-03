@@ -67,6 +67,30 @@ python -m app.main
 - `https://127.0.0.1:8443`
 - API docs: `https://127.0.0.1:8443/docs`
 
+## Linux detached run (SSH-safe)
+Use this when deploying on a Linux server and you want the app to keep running after SSH disconnect.
+
+1. Make script executable:
+```bash
+chmod +x scripts/linux_run_detached.sh
+```
+
+2. Start in background (creates venv, installs deps, runs app):
+```bash
+./scripts/linux_run_detached.sh start
+```
+
+3. Check status/logs:
+```bash
+./scripts/linux_run_detached.sh status
+./scripts/linux_run_detached.sh logs
+```
+
+4. Stop server:
+```bash
+./scripts/linux_run_detached.sh stop
+```
+
 ## Current API
 - `POST /api/tests/generate`
 - `POST /api/tests/grade`
