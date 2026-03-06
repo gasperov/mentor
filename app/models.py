@@ -107,6 +107,7 @@ class ProgressAttempt(BaseModel):
     level: SchoolLevel
     score: int = Field(ge=0, le=100)
     knowledge_level: str
+    client_ip: str = ""
     knowledge_gaps: list[str] = Field(default_factory=list)
 
 

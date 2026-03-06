@@ -1,9 +1,12 @@
 import asyncio
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
+import hmac
 import json
 import math
 from io import BytesIO
 from pathlib import Path
+import secrets
 import ssl
 import sys
 import time
@@ -19,13 +22,16 @@ from app.services.power import SleepBlocker
 from app.services.progress_store import ProgressStore
 from app.services.test_service import TestService
 
+progress_store = ProgressStore(Path(__file__).parent.parent / "data" / "progress.json")
 service = TestService(
     ai_client=AIClient(),
-    progress_store=ProgressStore(Path(__file__).parent.parent / "data" / "progress.json"),
+    progress_store=progress_store,
 )
 sleep_blocker = SleepBlocker()
 static_dir = Path(__file__).parent / "static"
 THROTTLE_SECONDS = 60.0
+UI_TOKEN_COOKIE = "learnme_ui_token"
+UI_TOKEN_HEADER = "x-ui-token"
 
 
 class EndpointRateLimiter:
@@ -86,19 +92,65 @@ app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
 @app.get("/")
 def index() -> FileResponse:
-    return FileResponse(static_dir / "index.html")
+    response = FileResponse(static_dir / "index.html")
+    token = secrets.token_urlsafe(24)
+    response.set_cookie(
+        key=UI_TOKEN_COOKIE,
+        value=token,
+        secure=True,
+        httponly=False,
+        samesite="strict",
+        max_age=24 * 60 * 60,
+        path="/",
+    )
+    return response
 
 
 @app.post("/api/tests/generate", response_model=GeneratedTest)
 def generate_test(
     request: Request, req: TestRequest, response: Response, x_session_id: str | None = Header(default=None)
 ) -> GeneratedTest:
+    client_ip = _request_client_ip(request)
+    session_id = x_session_id or "anonymous"
     try:
+        _ensure_ui_request_token(request)
         rate_limiter.enforce(endpoint="generate", identity=_request_identity(request, x_session_id))
-        result = service.generate_test(req, session_id=x_session_id or "anonymous")
+        result = service.generate_test(req, session_id=session_id)
         _set_ai_model_headers(response)
+        _log_api_event(
+            endpoint="generate",
+            status="ok",
+            client_ip=client_ip,
+            session_id=session_id,
+            student_id="",
+            topic=req.topic,
+            chapter=req.chapter,
+            test_id=result.test_id,
+        )
         return result
+    except HTTPException as exc:
+        _log_api_event(
+            endpoint="generate",
+            status=f"error:{exc.status_code}",
+            client_ip=client_ip,
+            session_id=session_id,
+            student_id="",
+            topic=req.topic,
+            chapter=req.chapter,
+            test_id="",
+        )
+        raise
     except AIClientError as exc:
+        _log_api_event(
+            endpoint="generate",
+            status="error:502",
+            client_ip=client_ip,
+            session_id=session_id,
+            student_id="",
+            topic=req.topic,
+            chapter=req.chapter,
+            test_id="",
+        )
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
@@ -109,21 +161,78 @@ async def grade_test(
     x_session_id: str | None = Header(default=None),
     x_student_id: str | None = Header(default=None),
 ) -> GradeResult:
+    client_ip = _request_client_ip(request)
+    session_id = x_session_id or "anonymous"
+    student_id = x_student_id or "anonymous"
     try:
+        _ensure_ui_request_token(request)
         rate_limiter.enforce(endpoint="grade", identity=_request_identity(request, x_session_id))
         req = await _parse_grade_request(request)
         result = service.grade_test(
             req,
-            session_id=x_session_id or "anonymous",
-            student_id=x_student_id or "anonymous",
+            session_id=session_id,
+            student_id=student_id,
+            client_ip=client_ip,
         )
         _set_ai_model_headers(response)
+        _log_api_event(
+            endpoint="grade",
+            status="ok",
+            client_ip=client_ip,
+            session_id=session_id,
+            student_id=student_id,
+            topic="",
+            chapter="",
+            test_id=req.test_id,
+        )
         return result
+    except HTTPException as exc:
+        _log_api_event(
+            endpoint="grade",
+            status=f"error:{exc.status_code}",
+            client_ip=client_ip,
+            session_id=session_id,
+            student_id=student_id,
+            topic="",
+            chapter="",
+            test_id="",
+        )
+        raise
     except KeyError as exc:
+        _log_api_event(
+            endpoint="grade",
+            status="error:404",
+            client_ip=client_ip,
+            session_id=session_id,
+            student_id=student_id,
+            topic="",
+            chapter="",
+            test_id="",
+        )
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
+        _log_api_event(
+            endpoint="grade",
+            status="error:409",
+            client_ip=client_ip,
+            session_id=session_id,
+            student_id=student_id,
+            topic="",
+            chapter="",
+            test_id="",
+        )
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     except AIClientError as exc:
+        _log_api_event(
+            endpoint="grade",
+            status="error:502",
+            client_ip=client_ip,
+            session_id=session_id,
+            student_id=student_id,
+            topic="",
+            chapter="",
+            test_id="",
+        )
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
@@ -219,6 +328,55 @@ def _request_identity(request: Request, x_session_id: str | None) -> str:
     if client_host:
         return client_host
     return "anonymous"
+
+
+def _request_client_ip(request: Request) -> str:
+    # Prefer proxy chain if present, then fallback to direct socket IP.
+    forwarded_for = (request.headers.get("x-forwarded-for") or "").strip()
+    if forwarded_for:
+        first = forwarded_for.split(",")[0].strip()
+        if first:
+            return first
+    real_ip = (request.headers.get("x-real-ip") or "").strip()
+    if real_ip:
+        return real_ip
+    if request.client and request.client.host:
+        return request.client.host
+    return "unknown"
+
+
+def _ensure_ui_request_token(request: Request) -> None:
+    cookie_token = (request.cookies.get(UI_TOKEN_COOKIE) or "").strip()
+    header_token = (request.headers.get(UI_TOKEN_HEADER) or "").strip()
+    if not cookie_token or not header_token:
+        raise HTTPException(status_code=403, detail="Dostop zavrnjen (manjka UI varnostni zeton).")
+    if not hmac.compare_digest(cookie_token, header_token):
+        raise HTTPException(status_code=403, detail="Dostop zavrnjen (neveljaven UI varnostni zeton).")
+
+
+def _log_api_event(
+    endpoint: str,
+    status: str,
+    client_ip: str,
+    session_id: str,
+    student_id: str,
+    topic: str,
+    chapter: str,
+    test_id: str,
+) -> None:
+    progress_store.append_event(
+        {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "endpoint": endpoint,
+            "status": status,
+            "client_ip": client_ip,
+            "session_id": session_id,
+            "student_id": student_id,
+            "topic": topic,
+            "chapter": chapter,
+            "test_id": test_id,
+        }
+    )
 
 
 def _validate_tls_certificate_pair(certfile: Path, keyfile: Path) -> None:

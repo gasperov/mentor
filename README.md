@@ -90,6 +90,7 @@ Rate limits:
 - `POST /api/tests/generate`: max 1 call per 60 seconds per session (`X-Session-Id`).
 - `POST /api/tests/grade`: max 1 call per 60 seconds per session (`X-Session-Id`).
 - If the limit is exceeded, API returns `429` with `Retry-After` header.
+- `POST /api/tests/generate` and `POST /api/tests/grade` additionally require a UI security token (cookie + `X-UI-Token` header match), which helps block crawler/bot direct calls.
 
 Grading safety:
 - A given `test_id` can be graded only once.
@@ -108,8 +109,14 @@ If `OPENAI_API_KEY` is not set, the app uses mock mode (so the frontend flow wor
 ## Progress storage
 - Progress (attempt results) is saved to `data/progress.json`.
 - An additional tabular grading log is saved to `data/progress.txt`.
+- Each graded attempt now also stores `client_ip` in both files.
 - Student identity is an anonymous `X-Student-Id` from `localStorage`.
 - This allows progress history to persist across browser restarts.
+
+## API audit logs
+- API event audit log (JSONL) is saved to `data/api_events.jsonl`.
+- Tabular API event log is saved to `data/api_events.txt`.
+- Each event includes timestamp, endpoint, status, client IP, session ID, student ID, and request context (`topic/chapter/test_id` when available).
 
 ## Test randomness
 - Generation uses a variation marker and randomized approach, so new tests are not always identical.

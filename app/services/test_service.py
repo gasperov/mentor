@@ -43,7 +43,7 @@ class TestService:
         self._remember_questions(session_id, generated.questions)
         return generated
 
-    def grade_test(self, req: GradeRequest, session_id: str, student_id: str) -> GradeResult:
+    def grade_test(self, req: GradeRequest, session_id: str, student_id: str, client_ip: str) -> GradeResult:
         test = self._tests.get(req.test_id)
         if not test:
             raise KeyError("Test ne obstaja.")
@@ -51,7 +51,7 @@ class TestService:
             raise ValueError("Ta test je ze bil ocenjen.")
         result = self._grade_with_ai(test, req.answers) if self._ai.enabled else self._grade_mock(test, req.answers)
         self._update_focus_areas(session_id, result)
-        self._save_attempt(student_id, test, result)
+        self._save_attempt(student_id, client_ip, test, result)
         self._graded_test_ids.add(req.test_id)
         return result
 
@@ -383,7 +383,7 @@ class TestService:
             per_question=per_question,
         )
 
-    def _save_attempt(self, student_id: str, test: GeneratedTest, result: GradeResult) -> None:
+    def _save_attempt(self, student_id: str, client_ip: str, test: GeneratedTest, result: GradeResult) -> None:
         payload = ProgressAttempt(
             timestamp=datetime.now(timezone.utc).isoformat(),
             topic=test.topic,
@@ -391,6 +391,7 @@ class TestService:
             level=test.level,
             score=result.total_score,
             knowledge_level=result.knowledge_level,
+            client_ip=client_ip,
             knowledge_gaps=result.knowledge_gaps[:5],
         ).model_dump()
         self._progress_store.append_attempt(student_id=student_id, payload=payload)

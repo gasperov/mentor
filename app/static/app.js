@@ -270,6 +270,10 @@ function buildHeaders(options = {}) {
     "X-Session-Id": sessionId,
     "X-Student-Id": studentId,
   };
+  const uiToken = getCookie("learnme_ui_token");
+  if (uiToken) {
+    headers["X-UI-Token"] = uiToken;
+  }
   if (!options.isMultipart) {
     headers["Content-Type"] = "application/json";
   }
@@ -278,6 +282,18 @@ function buildHeaders(options = {}) {
 
 function createRuntimeId(prefix) {
   return `${prefix}-${Math.random().toString(36).slice(2)}-${Date.now()}`;
+}
+
+function getCookie(name) {
+  const key = `${name}=`;
+  const parts = document.cookie ? document.cookie.split(";") : [];
+  for (const part of parts) {
+    const trimmed = part.trim();
+    if (trimmed.startsWith(key)) {
+      return decodeURIComponent(trimmed.slice(key.length));
+    }
+  }
+  return "";
 }
 
 async function loadProgress() {
