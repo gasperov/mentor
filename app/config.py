@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     ssl_certfile: str = "certs/server.crt"
     ssl_keyfile: str = "certs/server.key"
 
-    model_config = SettingsConfigDict(env_file=".env", env_prefix="", case_sensitive=False)
+    model_config = SettingsConfigDict(env_file=".env", env_prefix="", case_sensitive=False, extra="ignore")
 
     def resolve_path(self, value: str) -> Path:
         return Path(value).expanduser().resolve()
