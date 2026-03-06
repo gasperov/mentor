@@ -32,7 +32,7 @@ sleep_blocker = SleepBlocker()
 static_dir = Path(__file__).parent / "static"
 themes_db_path = Path(__file__).parent.parent / "data" / "themes_database.json"
 THROTTLE_SECONDS = 60.0
-UI_TOKEN_COOKIE = "learnme_ui_token"
+UI_TOKEN_COOKIE = "ocenime_ui_token"
 UI_TOKEN_HEADER = "x-ui-token"
 _themes_cache: dict[str, Any] | None = None
 
@@ -89,7 +89,7 @@ async def lifespan(_: FastAPI):
         sleep_blocker.disable()
 
 
-app = FastAPI(title="LearnMe - Test Generator", lifespan=lifespan)
+app = FastAPI(title="OceniMe - Test Generator", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
 

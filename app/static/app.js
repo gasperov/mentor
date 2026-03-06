@@ -278,7 +278,7 @@ function buildHeaders(options = {}) {
     "X-Session-Id": sessionId,
     "X-Student-Id": studentId,
   };
-  const uiToken = getCookie("learnme_ui_token");
+  const uiToken = getCookie("ocenime_ui_token");
   if (uiToken) {
     headers["X-UI-Token"] = uiToken;
   }

@@ -1,4 +1,4 @@
-# LearnMe (MVP Scaffold)
+# OceniMe (MVP Scaffold)
 
 Web app for:
 - generating tests by subject/chapter/level,

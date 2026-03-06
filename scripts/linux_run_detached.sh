@@ -7,8 +7,8 @@ cd "$ROOT_DIR"
 VENV_DIR="${VENV_DIR:-.venv}"
 PYTHON_BIN="${PYTHON_BIN:-python3}"
 RUN_DIR="${RUN_DIR:-run}"
-PID_FILE="$RUN_DIR/learnme.pid"
-LOG_FILE="$RUN_DIR/learnme.log"
+PID_FILE="$RUN_DIR/ocenime.pid"
+LOG_FILE="$RUN_DIR/ocenime.log"
 
 mkdir -p "$RUN_DIR"
 
