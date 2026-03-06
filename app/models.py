@@ -3,7 +3,14 @@ from __future__ import annotations
 from enum import Enum
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+MAX_TOPIC_CHARS = 2000
+MAX_CHAPTER_CHARS = 2000
+MAX_TEST_ID_CHARS = 128
+MAX_QUESTION_ID_CHARS = 64
+MAX_ANSWER_CHARS = 2000
+MAX_ANSWER_ITEMS = 30
 
 
 class SchoolLevel(str, Enum):
@@ -18,11 +25,16 @@ class QuestionType(str, Enum):
 
 
 class TestRequest(BaseModel):
-    topic: str = Field(min_length=2, max_length=120)
-    chapter: str = Field(min_length=1, max_length=120)
+    topic: str = Field(min_length=2, max_length=MAX_TOPIC_CHARS)
+    chapter: str = Field(min_length=1, max_length=MAX_CHAPTER_CHARS)
     level: SchoolLevel
     language: Literal["sl"] = "sl"
     question_count: int = Field(default=8, ge=3, le=30)
+
+    @field_validator("topic", "chapter")
+    @classmethod
+    def strip_text_fields(cls, value: str) -> str:
+        return value.strip()
 
 
 class TestQuestion(BaseModel):
@@ -42,8 +54,32 @@ class GeneratedTest(BaseModel):
 
 
 class GradeRequest(BaseModel):
-    test_id: str
+    test_id: str = Field(min_length=1, max_length=MAX_TEST_ID_CHARS)
     answers: dict[str, str]
+
+    @field_validator("test_id")
+    @classmethod
+    def strip_test_id(cls, value: str) -> str:
+        return value.strip()
+
+    @field_validator("answers")
+    @classmethod
+    def validate_answers(cls, value: dict[str, str]) -> dict[str, str]:
+        if len(value) > MAX_ANSWER_ITEMS:
+            raise ValueError(f"Najvecje dovoljeno stevilo odgovorov je {MAX_ANSWER_ITEMS}.")
+
+        normalized: dict[str, str] = {}
+        for raw_key, raw_answer in value.items():
+            key = str(raw_key).strip()
+            answer = str(raw_answer).strip()
+            if not key:
+                raise ValueError("ID vprasanja ne sme biti prazen.")
+            if len(key) > MAX_QUESTION_ID_CHARS:
+                raise ValueError(f"ID vprasanja je predolg (max {MAX_QUESTION_ID_CHARS} znakov).")
+            if len(answer) > MAX_ANSWER_CHARS:
+                raise ValueError(f"Odgovor je predolg (max {MAX_ANSWER_CHARS} znakov).")
+            normalized[key] = answer
+        return normalized
 
 
 class QuestionGrade(BaseModel):

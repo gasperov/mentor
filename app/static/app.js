@@ -5,6 +5,7 @@ let studentId = createRuntimeId("student");
 let activeTopicKey = null;
 let isBusy = false;
 let isCurrentTestGraded = false;
+const MAX_TEXT_INPUT_CHARS = 2000;
 const selectedImages = new Map();
 const previewUrls = new Map();
 
@@ -30,8 +31,8 @@ generateForm.addEventListener("submit", async (e) => {
   if (isBusy) return;
 
   const payload = {
-    topic: document.getElementById("topic").value.trim(),
-    chapter: document.getElementById("chapter").value.trim(),
+    topic: document.getElementById("topic").value.trim().slice(0, MAX_TEXT_INPUT_CHARS),
+    chapter: document.getElementById("chapter").value.trim().slice(0, MAX_TEXT_INPUT_CHARS),
     level: document.getElementById("level").value,
     language: "sl",
     question_count: Number(document.getElementById("question_count").value || 8),
@@ -82,7 +83,10 @@ answersForm.addEventListener("submit", async (e) => {
       answers[q.id] = checked.join(" | ");
     } else {
       const el = document.getElementById(`answer-${q.id}`);
-      answers[q.id] = el ? el.value.trim() : "";
+      answers[q.id] = el ? el.value.trim().slice(0, MAX_TEXT_INPUT_CHARS) : "";
+    }
+    if (answers[q.id].length > MAX_TEXT_INPUT_CHARS) {
+      answers[q.id] = answers[q.id].slice(0, MAX_TEXT_INPUT_CHARS);
     }
   });
   const hasImages = selectedImages.size > 0;
@@ -184,7 +188,7 @@ function renderTest(test) {
     const answerInput =
       q.type === "multiple_choice"
         ? ""
-        : `<textarea id="answer-${q.id}" placeholder="Vpisi odgovor..."></textarea>`;
+        : `<textarea id="answer-${q.id}" placeholder="Vpisi odgovor..." maxlength="${MAX_TEXT_INPUT_CHARS}"></textarea>`;
     const imageInput = `
       <div class="image-tools">
         <label class="mini">Dodaj sliko odgovora (telefon/kamera):</label>
