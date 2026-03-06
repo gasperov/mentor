@@ -1,13 +1,12 @@
-import base64
-import binascii
 import asyncio
 from contextlib import asynccontextmanager
-import hmac
 import json
+import math
 from io import BytesIO
 from pathlib import Path
 import ssl
 import sys
+import time
 
 from fastapi import FastAPI, Header, HTTPException, Query, Request, Response, UploadFile
 from fastapi.responses import FileResponse
@@ -26,64 +25,31 @@ service = TestService(
 )
 sleep_blocker = SleepBlocker()
 static_dir = Path(__file__).parent / "static"
+THROTTLE_SECONDS = 60.0
 
 
-class BasicAuth:
-    def __init__(self, users_file: Path) -> None:
-        self._users_file = users_file
-        self._users: dict[str, str] = {}
-        self.reload()
+class EndpointRateLimiter:
+    def __init__(self, window_seconds: float) -> None:
+        self._window_seconds = window_seconds
+        self._last_seen: dict[tuple[str, str], float] = {}
 
-    def reload(self) -> None:
-        if not self._users_file.exists():
-            raise RuntimeError(f"Basic auth users file was not found: {self._users_file}")
-
-        payload = json.loads(self._users_file.read_text(encoding="utf-8"))
-        users: dict[str, str] = {}
-
-        if isinstance(payload, dict) and isinstance(payload.get("users"), list):
-            for item in payload["users"]:
-                if not isinstance(item, dict):
-                    continue
-                username = str(item.get("username") or "").strip()
-                password = str(item.get("password") or "")
-                if username and password:
-                    users[username] = password
-        elif isinstance(payload, dict):
-            for username, password in payload.items():
-                if username and isinstance(password, str) and password:
-                    users[str(username)] = password
-
-        if not users:
-            raise RuntimeError(
-                f"Basic auth users file has no valid users: {self._users_file}. "
-                "Expected {'users':[{'username':'...','password':'...'}]}."
-            )
-
-        self._users = users
-
-    def verify_authorization_header(self, authorization: str | None) -> bool:
-        if not authorization:
-            return False
-        scheme, _, encoded = authorization.partition(" ")
-        if scheme.lower() != "basic" or not encoded:
-            return False
-
-        try:
-            decoded = base64.b64decode(encoded).decode("utf-8")
-        except (binascii.Error, UnicodeDecodeError):
-            return False
-
-        username, sep, password = decoded.partition(":")
-        if not sep or not username:
-            return False
-        expected_password = self._users.get(username)
-        if expected_password is None:
-            return False
-        return hmac.compare_digest(expected_password, password)
+    def enforce(self, endpoint: str, identity: str) -> None:
+        key = (endpoint, identity)
+        now = time.monotonic()
+        previous = self._last_seen.get(key)
+        if previous is not None:
+            elapsed = now - previous
+            if elapsed < self._window_seconds:
+                retry_after = max(1, math.ceil(self._window_seconds - elapsed))
+                raise HTTPException(
+                    status_code=429,
+                    detail=f"Prevec zahtevkov. Poskusi znova cez {retry_after} sekund.",
+                    headers={"Retry-After": str(retry_after)},
+                )
+        self._last_seen[key] = now
 
 
-basic_auth = BasicAuth(settings.resolve_path(settings.basic_auth_users_file)) if settings.basic_auth_enabled else None
+rate_limiter = EndpointRateLimiter(window_seconds=THROTTLE_SECONDS)
 
 
 def _is_ignorable_windows_reset(context: dict) -> bool:
@@ -107,8 +73,6 @@ def _loop_exception_handler(loop: asyncio.AbstractEventLoop, context: dict) -> N
 async def lifespan(_: FastAPI):
     if sys.platform.startswith("win"):
         asyncio.get_running_loop().set_exception_handler(_loop_exception_handler)
-    if basic_auth:
-        basic_auth.reload()
     sleep_blocker.enable()
     try:
         yield
@@ -120,19 +84,6 @@ app = FastAPI(title="LearnMe - Test Generator", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
 
-@app.middleware("http")
-async def require_basic_auth(request: Request, call_next):
-    if not settings.basic_auth_enabled:
-        return await call_next(request)
-    if basic_auth and basic_auth.verify_authorization_header(request.headers.get("authorization")):
-        return await call_next(request)
-    return Response(
-        content="Unauthorized",
-        status_code=401,
-        headers={"WWW-Authenticate": 'Basic realm="LearnMe", charset="UTF-8"'},
-    )
-
-
 @app.get("/")
 def index() -> FileResponse:
     return FileResponse(static_dir / "index.html")
@@ -140,9 +91,10 @@ def index() -> FileResponse:
 
 @app.post("/api/tests/generate", response_model=GeneratedTest)
 def generate_test(
-    req: TestRequest, response: Response, x_session_id: str | None = Header(default=None)
+    request: Request, req: TestRequest, response: Response, x_session_id: str | None = Header(default=None)
 ) -> GeneratedTest:
     try:
+        rate_limiter.enforce(endpoint="generate", identity=_request_identity(request, x_session_id))
         result = service.generate_test(req, session_id=x_session_id or "anonymous")
         _set_ai_model_headers(response)
         return result
@@ -158,6 +110,7 @@ async def grade_test(
     x_student_id: str | None = Header(default=None),
 ) -> GradeResult:
     try:
+        rate_limiter.enforce(endpoint="grade", identity=_request_identity(request, x_session_id))
         req = await _parse_grade_request(request)
         result = service.grade_test(
             req,
@@ -168,6 +121,8 @@ async def grade_test(
         return result
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     except AIClientError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
@@ -254,6 +209,16 @@ def _set_ai_model_headers(response: Response) -> None:
     configured, used = service.get_model_info()
     response.headers["X-AI-Model-Configured"] = configured
     response.headers["X-AI-Model-Used"] = used
+
+
+def _request_identity(request: Request, x_session_id: str | None) -> str:
+    session = (x_session_id or "").strip()
+    if session:
+        return session
+    client_host = request.client.host if request.client else ""
+    if client_host:
+        return client_host
+    return "anonymous"
 
 
 def _validate_tls_certificate_pair(certfile: Path, keyfile: Path) -> None:

@@ -32,6 +32,7 @@ class TestService:
         self._session_test_ids: dict[str, list[str]] = defaultdict(list)
         self._session_seen_questions: dict[str, set[str]] = defaultdict(set)
         self._session_focus_areas: dict[str, list[str]] = defaultdict(list)
+        self._graded_test_ids: set[str] = set()
 
     def generate_test(self, req: TestRequest, session_id: str) -> GeneratedTest:
         seen = self._session_seen_questions[session_id]
@@ -46,9 +47,12 @@ class TestService:
         test = self._tests.get(req.test_id)
         if not test:
             raise KeyError("Test ne obstaja.")
+        if req.test_id in self._graded_test_ids:
+            raise ValueError("Ta test je ze bil ocenjen.")
         result = self._grade_with_ai(test, req.answers) if self._ai.enabled else self._grade_mock(test, req.answers)
         self._update_focus_areas(session_id, result)
         self._save_attempt(student_id, test, result)
+        self._graded_test_ids.add(req.test_id)
         return result
 
     def get_progress(self, student_id: str) -> ProgressResponse:

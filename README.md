@@ -44,26 +44,12 @@ Set these in `.env`:
 - `SSL_KEYFILE=certs/server.key`
 Note: SSH keys generated with `ssh-keygen` cannot be used as HTTPS TLS certs.
 
-4. Configure Basic Auth users:
-```bash
-copy config\basic_auth_users.example.json config\basic_auth_users.json
-```
-Then edit `config/basic_auth_users.json` and set real credentials.
-Example format:
-```json
-{
-  "users": [
-    { "username": "teacher", "password": "change-this-password" }
-  ]
-}
-```
-
-5. Start the HTTPS server:
+4. Start the HTTPS server:
 ```bash
 python -m app.main
 ```
 
-6. Open:
+5. Open:
 - `https://127.0.0.1:8443`
 - API docs: `https://127.0.0.1:8443/docs`
 
@@ -96,15 +82,18 @@ chmod +x scripts/linux_run_detached.sh
 - `POST /api/tests/grade`
 - `GET /api/progress`
 
-All routes are protected with HTTP Basic Auth when `BASIC_AUTH_ENABLED=true`.
-Example API call with Basic Auth:
-```bash
-curl -k -u teacher:change-this-password https://127.0.0.1:8443/api/progress
-```
-
 `POST /api/tests/grade` supports:
 - JSON (`test_id`, `answers`) or
 - `multipart/form-data` (`test_id`, `answers_json`, `image_<question_id>` files).
+
+Rate limits:
+- `POST /api/tests/generate`: max 1 call per 60 seconds per session (`X-Session-Id`).
+- `POST /api/tests/grade`: max 1 call per 60 seconds per session (`X-Session-Id`).
+- If the limit is exceeded, API returns `429` with `Retry-After` header.
+
+Grading safety:
+- A given `test_id` can be graded only once.
+- Re-grading an already graded test returns `409`.
 
 If `OPENAI_API_KEY` is not set, the app uses mock mode (so the frontend flow works immediately).
 

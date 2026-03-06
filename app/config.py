@@ -10,8 +10,6 @@ class Settings(BaseSettings):
     port: int = 8443
     ssl_certfile: str = "certs/server.crt"
     ssl_keyfile: str = "certs/server.key"
-    basic_auth_enabled: bool = True
-    basic_auth_users_file: str = "config/basic_auth_users.json"
 
     model_config = SettingsConfigDict(env_file=".env", env_prefix="", case_sensitive=False)
 

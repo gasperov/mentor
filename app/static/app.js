@@ -4,6 +4,7 @@ let sessionId = createRuntimeId("sess");
 let studentId = createRuntimeId("student");
 let activeTopicKey = null;
 let isBusy = false;
+let isCurrentTestGraded = false;
 const selectedImages = new Map();
 const previewUrls = new Map();
 
@@ -27,7 +28,6 @@ loadProgress();
 generateForm.addEventListener("submit", async (e) => {
   e.preventDefault();
   if (isBusy) return;
-  resultCard.classList.add("hidden");
 
   const payload = {
     topic: document.getElementById("topic").value.trim(),
@@ -59,6 +59,7 @@ generateForm.addEventListener("submit", async (e) => {
     }
     updateModelIndicatorFromResponse(res);
     currentTest = await res.json();
+    resultCard.classList.add("hidden");
     renderTest(currentTest);
     setStatus("Test je pripravljen.", "success");
   });
@@ -67,6 +68,10 @@ generateForm.addEventListener("submit", async (e) => {
 answersForm.addEventListener("submit", async (e) => {
   e.preventDefault();
   if (isBusy || !currentTest) return;
+  if (isCurrentTestGraded) {
+    setStatus("Ta test je ze bil ocenjen. Generiraj nov test.", "info");
+    return;
+  }
 
   const answers = {};
   currentTest.questions.forEach((q) => {
@@ -121,6 +126,8 @@ answersForm.addEventListener("submit", async (e) => {
     updateModelIndicatorFromResponse(res);
     const grade = await res.json();
     renderResult(grade);
+    isCurrentTestGraded = true;
+    setGradeButtonDisabled(true);
     await loadProgress();
     setStatus("Ocenjevanje uspesno zakljuceno.", "success");
   });
@@ -132,7 +139,6 @@ regenerateBtn.addEventListener("click", async () => {
     setStatus("Najprej generiraj prvi test.", "error");
     return;
   }
-  resultCard.classList.add("hidden");
 
   await withBusy(regenerateBtn, "Generiranje...", "Ustvari nov test brez ponovitev", async () => {
     setStatus("Generiram nov test brez ponovitev...", "info");
@@ -148,12 +154,14 @@ regenerateBtn.addEventListener("click", async () => {
     }
     updateModelIndicatorFromResponse(res);
     currentTest = await res.json();
+    resultCard.classList.add("hidden");
     renderTest(currentTest);
     setStatus("Nov test je pripravljen.", "success");
   });
 });
 
 function renderTest(test) {
+  isCurrentTestGraded = false;
   clearAllSelectedImages();
   answersForm.innerHTML = "";
   test.questions.forEach((q, idx) => {
@@ -207,6 +215,7 @@ function renderTest(test) {
   submit.type = "submit";
   submit.textContent = "Oddaj in oceni";
   answersForm.appendChild(submit);
+  setGradeButtonDisabled(false);
 
   testCard.classList.remove("hidden");
 }
@@ -320,6 +329,7 @@ function resetPracticeState() {
   sessionId = createRuntimeId("sess");
   studentId = createRuntimeId("student");
   currentTest = null;
+  isCurrentTestGraded = false;
   lastGeneratePayload = null;
   answersForm.innerHTML = "";
   resultOutput.innerHTML = "";
@@ -359,8 +369,14 @@ function setUiBusy(state) {
   const genBtn = generateForm.querySelector("button[type='submit']");
   const gradeBtn = answersForm.querySelector("button[type='submit']");
   if (genBtn) genBtn.disabled = state;
-  if (gradeBtn) gradeBtn.disabled = state;
+  if (gradeBtn) gradeBtn.disabled = state || isCurrentTestGraded;
   if (regenerateBtn) regenerateBtn.disabled = state;
+}
+
+function setGradeButtonDisabled(state) {
+  const gradeBtn = answersForm.querySelector("button[type='submit']");
+  if (!gradeBtn) return;
+  gradeBtn.disabled = state || isBusy;
 }
 
 function escapeHtml(value) {
