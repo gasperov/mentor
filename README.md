@@ -81,10 +81,13 @@ chmod +x scripts/linux_run_detached.sh
 - `POST /api/tests/generate`
 - `POST /api/tests/grade`
 - `GET /api/progress`
+- `GET /api/themes`
 
 `POST /api/tests/grade` supports:
 - JSON (`test_id`, `answers`) or
 - `multipart/form-data` (`test_id`, `answers_json`, `image_<question_id>` files).
+
+`GET /api/themes` returns the local themes database (`data/themes_database.json`) used by the UI for topic/chapter suggestions.
 
 Rate limits:
 - `POST /api/tests/generate`: max 1 call per 60 seconds per session (`X-Session-Id`).
@@ -117,6 +120,25 @@ If `OPENAI_API_KEY` is not set, the app uses mock mode (so the frontend flow wor
 - API event audit log (JSONL) is saved to `data/api_events.jsonl`.
 - Tabular API event log is saved to `data/api_events.txt`.
 - Each event includes timestamp, endpoint, status, client IP, session ID, student ID, and request context (`topic/chapter/test_id` when available).
+
+## Themes Database
+- Themes DB file: `data/themes_database.json`.
+- Regenerate with:
+```bash
+python scripts/regenerate_themes_db.py
+```
+- Fallback mode (no network):
+```bash
+python scripts/regenerate_themes_db.py --no-fetch
+```
+- Official-only bucket (store only discovered official themes in `themes.official_all`):
+```bash
+python scripts/regenerate_themes_db.py --official-only
+```
+- The file stores source URLs and any fetch errors under `source_urls` and `fetch_errors`.
+- Exhaustive discovered candidates are stored under `themes_official_all`:
+  - `themes_official_all.by_source`
+  - `themes_official_all.all`
 
 ## Test randomness
 - Generation uses a variation marker and randomized approach, so new tests are not always identical.

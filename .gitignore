@@ -49,4 +49,6 @@ Thumbs.db
 uploads/
 data/progress.json
 data/progress.txt
+data/api_events.jsonl
+data/api_events.txt
 data/*.bak
