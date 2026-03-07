@@ -108,6 +108,8 @@ class TestService:
             f"{focus_block}"
             "Nikoli ne daj namigov, vodilnih vprasanj ali delov odgovora. "
             "Ne uporabljaj fraz: 'namig', 'pomoc', 'spomni se'. "
+            "Pri multiple_choice naj pravilen odgovor ne bo sistematicno na prvi poziciji; "
+            "razporeditev opcij naj bo uravnotezena. "
             f"Ne ponavljaj teh prejsnjih vprasanj (po pomenu in formulaciji): {banned}. "
             "JSON format: {\"questions\":[{\"id\":\"q1\",\"type\":\"multiple_choice|short_answer\","
             "\"question\":\"...\",\"options\":[\"...\"]}]} . "
@@ -123,6 +125,7 @@ class TestService:
                 req.question_count - len(questions), req.topic, req.chapter, req.level, seen_questions
             )
             questions.extend(filler)
+        self._shuffle_multiple_choice_options(questions)
         random.shuffle(questions)
         for idx, q in enumerate(questions, start=1):
             q.id = f"q{idx}"
@@ -172,13 +175,15 @@ class TestService:
 
     def _generate_mock(self, req: TestRequest, session_id: str) -> GeneratedTest:
         seen = self._session_seen_questions[session_id]
+        questions = self._mock_questions(req.question_count, req.topic, req.chapter, req.level, seen)
+        self._shuffle_multiple_choice_options(questions)
         return GeneratedTest(
             test_id=str(uuid.uuid4()),
             topic=req.topic,
             chapter=req.chapter,
             level=req.level,
             language=req.language,
-            questions=self._mock_questions(req.question_count, req.topic, req.chapter, req.level, seen),
+            questions=questions,
         )
 
     def _grade_mock(self, test: GeneratedTest, answers: dict[str, str]) -> GradeResult:
@@ -314,6 +319,13 @@ class TestService:
         seen = self._session_seen_questions[session_id]
         for q in questions:
             seen.add(self._question_key(q.question))
+
+    def _shuffle_multiple_choice_options(self, questions: list[TestQuestion]) -> None:
+        for q in questions:
+            if q.type != QuestionType.multiple_choice or not isinstance(q.options, list):
+                continue
+            if len(q.options) > 1:
+                random.shuffle(q.options)
 
     def _knowledge_level_from_score(self, score: int) -> str:
         if score >= 90:

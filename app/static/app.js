@@ -6,18 +6,11 @@ let activeTopicKey = null;
 let isBusy = false;
 let isCurrentTestGraded = false;
 const MAX_TEXT_INPUT_CHARS = 2000;
-const MAX_THEME_SUGGESTIONS = 500;
 const selectedImages = new Map();
 const previewUrls = new Map();
-let themesDb = null;
 
 const generateForm = document.getElementById("generate-form");
 const answersForm = document.getElementById("answers-form");
-const topicInput = document.getElementById("topic");
-const chapterInput = document.getElementById("chapter");
-const topicSuggestions = document.getElementById("topic-suggestions");
-const chapterSuggestions = document.getElementById("chapter-suggestions");
-const themesHelp = document.getElementById("themes-help");
 const testCard = document.getElementById("test-card");
 const resultCard = document.getElementById("result-card");
 const resultOutput = document.getElementById("result-output");
@@ -32,7 +25,6 @@ const copyPhoneUrlBtn = document.getElementById("copy-phone-url");
 
 initPhoneConnect();
 loadProgress();
-initThemesAssist();
 
 generateForm.addEventListener("submit", async (e) => {
   e.preventDefault();
@@ -290,107 +282,6 @@ function buildHeaders(options = {}) {
 
 function createRuntimeId(prefix) {
   return `${prefix}-${Math.random().toString(36).slice(2)}-${Date.now()}`;
-}
-
-async function initThemesAssist() {
-  if (!topicInput || !chapterInput) return;
-  try {
-    const res = await fetch("/api/themes", { method: "GET" });
-    if (!res.ok) {
-      throw new Error("themes fetch failed");
-    }
-    themesDb = await res.json();
-    const topics = extractTopics(themesDb).slice(0, MAX_THEME_SUGGESTIONS);
-    populateDatalist(topicSuggestions, topics);
-    refreshChapterSuggestions();
-    topicInput.addEventListener("input", refreshChapterSuggestions);
-    topicInput.addEventListener("change", refreshChapterSuggestions);
-    if (themesHelp) {
-      themesHelp.textContent = `Nalozenih ${topics.length} predlogov tem.`;
-    }
-  } catch (_) {
-    if (themesHelp) {
-      themesHelp.textContent = "Predlogi tem trenutno niso na voljo.";
-    }
-  }
-}
-
-function extractTopics(db) {
-  if (!db || typeof db !== "object") return [];
-  const out = [];
-  const themes = db.themes || {};
-  const level2 = db.themes_level2 || {};
-  Object.keys(level2).forEach((k) => out.push(String(k)));
-  Object.values(themes).forEach((bucket) => {
-    if (!Array.isArray(bucket)) return;
-    bucket.forEach((item) => out.push(String(item)));
-  });
-  return uniqueStrings(out);
-}
-
-function extractChaptersForTopic(db, topicRaw) {
-  if (!db || typeof db !== "object") return [];
-  const level2 = db.themes_level2 || {};
-  if (!topicRaw) return [];
-  const topic = String(topicRaw).trim();
-  if (!topic) return [];
-  if (Array.isArray(level2[topic])) {
-    return uniqueStrings(level2[topic].map((x) => String(x)));
-  }
-  const normalizedTarget = normalizeForMatch(topic);
-  const foundKey = Object.keys(level2).find((k) => normalizeForMatch(k) === normalizedTarget);
-  if (foundKey && Array.isArray(level2[foundKey])) {
-    return uniqueStrings(level2[foundKey].map((x) => String(x)));
-  }
-  return [];
-}
-
-function refreshChapterSuggestions() {
-  if (!chapterSuggestions) return;
-  const chapters = extractChaptersForTopic(themesDb, topicInput ? topicInput.value : "").slice(0, MAX_THEME_SUGGESTIONS);
-  populateDatalist(chapterSuggestions, chapters);
-  if (!themesHelp) return;
-  if (!topicInput || !topicInput.value.trim()) {
-    themesHelp.textContent = "Izberi temo za predloge poglavij.";
-    return;
-  }
-  if (chapters.length === 0) {
-    themesHelp.textContent = "Za izbrano temo ni specificnih predlogov poglavij.";
-    return;
-  }
-  themesHelp.textContent = `Za temo je na voljo ${chapters.length} predlogov poglavij.`;
-}
-
-function populateDatalist(target, values) {
-  if (!target) return;
-  target.innerHTML = "";
-  values.forEach((value) => {
-    const option = document.createElement("option");
-    option.value = value;
-    target.appendChild(option);
-  });
-}
-
-function uniqueStrings(values) {
-  const seen = new Set();
-  const out = [];
-  values.forEach((value) => {
-    const clean = String(value || "").trim();
-    if (!clean) return;
-    const key = normalizeForMatch(clean);
-    if (seen.has(key)) return;
-    seen.add(key);
-    out.push(clean);
-  });
-  return out;
-}
-
-function normalizeForMatch(text) {
-  return String(text || "")
-    .normalize("NFKD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .trim();
 }
 
 function getCookie(name) {

@@ -10,7 +10,6 @@ import secrets
 import ssl
 import sys
 import time
-from typing import Any
 
 from fastapi import FastAPI, Header, HTTPException, Query, Request, Response, UploadFile
 from fastapi.responses import FileResponse
@@ -30,11 +29,9 @@ service = TestService(
 )
 sleep_blocker = SleepBlocker()
 static_dir = Path(__file__).parent / "static"
-themes_db_path = Path(__file__).parent.parent / "data" / "themes_database.json"
 THROTTLE_SECONDS = 60.0
 UI_TOKEN_COOKIE = "ocenime_ui_token"
 UI_TOKEN_HEADER = "x-ui-token"
-_themes_cache: dict[str, Any] | None = None
 
 
 class EndpointRateLimiter:
@@ -244,11 +241,6 @@ def get_progress(x_student_id: str | None = Header(default=None)) -> ProgressRes
     return service.get_progress(student_id=x_student_id or "anonymous")
 
 
-@app.get("/api/themes")
-def get_themes() -> dict[str, Any]:
-    return _load_themes_database()
-
-
 @app.get("/api/connect/qr")
 def connect_qr(data: str = Query(min_length=1, max_length=1024)) -> Response:
     try:
@@ -360,23 +352,6 @@ def _ensure_ui_request_token(request: Request) -> None:
         raise HTTPException(status_code=403, detail="Dostop zavrnjen (manjka UI varnostni zeton).")
     if not hmac.compare_digest(cookie_token, header_token):
         raise HTTPException(status_code=403, detail="Dostop zavrnjen (neveljaven UI varnostni zeton).")
-
-
-def _load_themes_database() -> dict[str, Any]:
-    global _themes_cache
-    if _themes_cache is not None:
-        return _themes_cache
-    if not themes_db_path.exists():
-        _themes_cache = {"themes": {}, "themes_level2": {}, "themes_official_all": {"count": 0, "all": []}}
-        return _themes_cache
-    try:
-        payload = json.loads(themes_db_path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
-        raise HTTPException(status_code=500, detail="themes_database.json ni veljaven JSON.") from exc
-    if not isinstance(payload, dict):
-        raise HTTPException(status_code=500, detail="themes_database.json mora biti JSON objekt.")
-    _themes_cache = payload
-    return payload
 
 
 def _log_api_event(

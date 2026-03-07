@@ -81,13 +81,10 @@ chmod +x scripts/linux_run_detached.sh
 - `POST /api/tests/generate`
 - `POST /api/tests/grade`
 - `GET /api/progress`
-- `GET /api/themes`
 
 `POST /api/tests/grade` supports:
 - JSON (`test_id`, `answers`) or
 - `multipart/form-data` (`test_id`, `answers_json`, `image_<question_id>` files).
-
-`GET /api/themes` returns the local themes database (`data/themes_database.json`) used by the UI for topic/chapter suggestions.
 
 Rate limits:
 - `POST /api/tests/generate`: max 1 call per 60 seconds per session (`X-Session-Id`).
